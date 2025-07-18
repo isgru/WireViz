@@ -4,7 +4,7 @@ from dataclasses import asdict
 from itertools import groupby
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from wireviz.DataClasses import AdditionalComponent, Cable, Color, Connector
+from wireviz.DataClasses import AdditionalComponent, Cable, Color, Connector, ConduitConnector, Conduit
 from wireviz.wv_colors import translate_color
 from wireviz.wv_gv_html import html_bgcolor_attr, html_line_breaks
 from wireviz.wv_helper import clean_whitespace
@@ -125,6 +125,31 @@ def generate_bom(harness: "Harness") -> List[BOMEntry]:
         # add connectors aditional components to bom
         bom_entries.extend(get_additional_component_bom(connector))
 
+    # conduit connectors
+    for conduit_connector in harness.conduit_connectors.values():
+        if not conduit_connector.ignore_in_bom:
+            description = (
+                "Conduit Connector"
+                + (f", {conduit_connector.type}" if conduit_connector.type else "")
+                + (f", {conduit_connector.subtype}" if conduit_connector.subtype else "")
+                + (f", {conduit_connector.pincount} pins" if conduit_connector.show_pincount else "")
+                + (
+                    f", {translate_color(conduit_connector.color, harness.options.color_mode)}"
+                    if conduit_connector.color
+                    else ""
+                )
+            )
+            bom_entries.append(
+                {
+                    "description": description,
+                    "designators": conduit_connector.name if conduit_connector.show_name else None,
+                    **optional_fields(conduit_connector),
+                }
+            )
+
+        # add conduit_connectors aditional components to bom
+        bom_entries.extend(get_additional_component_bom(conduit_connector))
+
     # cables
     # TODO: If category can have other non-empty values than 'bundle', maybe it should be part of description?
     for cable in harness.cables.values():
@@ -184,6 +209,37 @@ def generate_bom(harness: "Harness") -> List[BOMEntry]:
 
         # add cable/bundles aditional components to bom
         bom_entries.extend(get_additional_component_bom(cable))
+
+    # conduits
+    for conduit in harness.conduits.values():
+        if not conduit.ignore_in_bom:
+            # process conduit as a single entity
+            description = (
+                "Conduit"
+                + (f", {conduit.type}" if conduit.type else "")
+                + (
+                    f", {conduit.gauge} {conduit.gauge_unit}"
+                    if conduit.gauge
+                    else ""
+                )
+                + (
+                    f", {translate_color(conduit.color, harness.options.color_mode)}"
+                    if conduit.color
+                    else ""
+                )
+            )
+            bom_entries.append(
+                {
+                    "description": description,
+                    "qty": conduit.length,
+                    "unit": conduit.length_unit,
+                    "designators": conduit.name if conduit.show_name else None,
+                    **optional_fields(conduit),
+                }
+            )
+
+        # add conduit/bundles aditional components to bom
+        bom_entries.extend(get_additional_component_bom(conduit))
 
     # add harness aditional components to bom directly, as they both are List[BOMEntry]
     bom_entries.extend(harness.additional_bom_items)

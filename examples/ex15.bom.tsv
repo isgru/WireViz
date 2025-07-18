@@ -1,0 +1,9 @@
+Id	Description	Qty	Unit	Designators
+1	Cable, 1 wires	0.2	m	W2
+2	Conduit	0.3	m	C1, C2, C3
+3	Conduit Connector, 3 pins	1		Y1
+4	Connector, 1 pins	1		X3
+5	Connector, 2 pins	1		X2
+6	Connector, 3 pins	1		X1
+7	Wire, BK	0.2	m	W1
+8	Wire, RD	0.2	m	W1

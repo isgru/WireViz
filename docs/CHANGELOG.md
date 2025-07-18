@@ -1,5 +1,11 @@
 # Change Log
 
+## [0.5](https://github.com/wireviz/WireViz/tree/v0.5) (20XX-XX-XX)
+
+### New Features
+
+- Add Conduits ([#31](https://github.com/wireviz/WireViz/issues/31), [#56](https://github.com/wireviz/WireViz/issues/56))
+
 ## [0.4.1] (2024-07-13)
 
 ### Improvements to help reported issues

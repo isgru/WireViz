@@ -16,6 +16,8 @@ from wireviz.DataClasses import (
     MatePin,
     Metadata,
     Options,
+    Conduit,
+    ConduitConnector,
     Side,
     Tweak,
 )
@@ -73,7 +75,9 @@ class Harness:
 
     def __post_init__(self):
         self.connectors = {}
+        self.conduit_connectors = {}
         self.cables = {}
+        self.conduits = {}
         self.mates = []
         self._bom = []  # Internal Cache for generated bom
         self.additional_bom_items = []
@@ -82,8 +86,14 @@ class Harness:
         check_old(f"Connector '{name}'", OLD_CONNECTOR_ATTR, kwargs)
         self.connectors[name] = Connector(name, *args, **kwargs)
 
+    def add_conduit_connector(self, name: str, *args, **kwargs) -> None:
+        self.conduit_connectors[name] = ConduitConnector(name, *args, **kwargs)
+
     def add_cable(self, name: str, *args, **kwargs) -> None:
         self.cables[name] = Cable(name, *args, **kwargs)
+
+    def add_conduit(self, name: str, *args, **kwargs) -> None:
+        self.conduits[name] = Conduit(name, *args, **kwargs)
 
     def add_mate_pin(self, from_name, from_pin, to_name, to_pin, arrow_type) -> None:
         self.mates.append(MatePin(from_name, from_pin, to_name, to_pin, arrow_type))
@@ -100,6 +110,7 @@ class Harness:
         self,
         from_name: str,
         from_pin: (int, str),
+        conduits: [str],
         via_name: str,
         via_wire: (int, str),
         to_name: str,
@@ -153,6 +164,7 @@ class Harness:
                 via_wire = (
                     cable.wirelabels.index(via_wire) + 1
                 )  # list index starts at 0, wire IDs start at 1
+            cable.conduits = conduits
 
         # perform the actual connection
         self.cables[via_name].connect(from_name, from_pin, via_wire, to_name, to_pin)
@@ -477,46 +489,113 @@ class Harness:
                         else ""
                     )
                     code_left_1 = f"{connection.from_name}{from_port_str}:e"
-                    code_left_2 = f"{cable.name}:w{connection.via_port}:w"
-                    dot.edge(code_left_1, code_left_2)
-                    if from_connector.show_name:
-                        from_info = [
-                            str(connection.from_name),
-                            str(connection.from_pin),
+
+                    if not cable.conduits:
+                        code_left_2 = f"{cable.name}:w{connection.via_port}:w"
+                        dot.edge(code_left_1, code_left_2)
+                        if from_connector.show_name:
+                            from_info = [
+                                str(connection.from_name),
+                                str(connection.from_pin),
+                            ]
+                            if from_connector.pinlabels:
+                                pinlabel = from_connector.pinlabels[from_pin_index]
+                                if pinlabel != "":
+                                    from_info.append(pinlabel)
+                            from_string = ":".join(from_info)
+                        else:
+                            from_string = ""
+                        html = [
+                            row.replace(f"<!-- {connection.via_port}_in -->", from_string)
+                            for row in html
                         ]
-                        if from_connector.pinlabels:
-                            pinlabel = from_connector.pinlabels[from_pin_index]
-                            if pinlabel != "":
-                                from_info.append(pinlabel)
-                        from_string = ":".join(from_info)
                     else:
-                        from_string = ""
-                    html = [
-                        row.replace(f"<!-- {connection.via_port}_in -->", from_string)
-                        for row in html
-                    ]
+                        for conduitname in cable.conduits:
+                            conduit = self.conduits[conduitname]
+                            code_left_2 = f"{conduit.name}:w{conduit.add_port(cable.colors[connection.via_port - 1])}:w"
+                            dot.edge(code_left_1, code_left_2)
+                            if from_connector.show_name:
+                                from_info = [
+                                    str(connection.from_name),
+                                    str(connection.from_pin),
+                                ]
+                                if from_connector.pinlabels:
+                                    pinlabel = from_connector.pinlabels[from_pin_index]
+                                    if pinlabel != "":
+                                        from_info.append(pinlabel)
+                                from_string = ":".join(from_info)
+                            else:
+                                from_string = ""
+                            html = [
+                                row.replace(f"<!-- {connection.via_port}_in -->", from_string)
+                                for row in html
+                            ]
+                            code_left_1 = code_left_2[:-1] + 'e'
+
                 if connection.to_pin is not None:  # connect to right
                     to_connector = self.connectors[connection.to_name]
                     to_pin_index = to_connector.pins.index(connection.to_pin)
                     to_port_str = (
                         f":p{to_pin_index+1}l" if to_connector.style != "simple" else ""
                     )
-                    code_right_1 = f"{cable.name}:w{connection.via_port}:e"
                     code_right_2 = f"{connection.to_name}{to_port_str}:w"
-                    dot.edge(code_right_1, code_right_2)
-                    if to_connector.show_name:
-                        to_info = [str(connection.to_name), str(connection.to_pin)]
-                        if to_connector.pinlabels:
-                            pinlabel = to_connector.pinlabels[to_pin_index]
-                            if pinlabel != "":
-                                to_info.append(pinlabel)
-                        to_string = ":".join(to_info)
+
+                    if not cable.conduits:
+                        code_right_1 = f"{cable.name}:w{connection.via_port}:e"
+                        dot.edge(code_right_1, code_right_2)
+                        if to_connector.show_name:
+                            to_info = [str(connection.to_name), str(connection.to_pin)]
+                            if to_connector.pinlabels:
+                                pinlabel = to_connector.pinlabels[to_pin_index]
+                                if pinlabel != "":
+                                    to_info.append(pinlabel)
+                            to_string = ":".join(to_info)
+                        else:
+                            to_string = ""
+                        html = [
+                            row.replace(f"<!-- {connection.via_port}_out -->", to_string)
+                            for row in html
+                        ]
                     else:
-                        to_string = ""
-                    html = [
-                        row.replace(f"<!-- {connection.via_port}_out -->", to_string)
-                        for row in html
-                    ]
+                        conduit = self.conduits[cable.conduits[-1]]
+                        code_right_conduit = f"{conduit.name}:w{connection.via_port}:e"
+                        code_right_wire = f"{cable.name}:w{connection.via_port}:w"
+
+                        dot.edge(code_right_conduit, code_right_wire)
+                        if to_connector.show_name:
+                            from_info = [
+                                str(connection.to_name),
+                                str(connection.to_pin),
+                            ]
+                            if from_connector.pinlabels:
+                                pinlabel = from_connector.pinlabels[to_pin_index]
+                                if pinlabel != "":
+                                    to_info.append(pinlabel)
+                            to_string = ":".join(from_info)
+                        else:
+                            to_string = ""
+                        html = [
+                            row.replace(f"<!-- {connection.via_port}_in -->", to_string)
+                            for row in html
+                        ]
+
+                        dot.edge(code_right_wire[:-1] + 'e', code_right_2)
+                        if to_connector.show_name:
+                            from_info = [
+                                str(connection.to_name),
+                                str(connection.to_pin),
+                            ]
+                            if from_connector.pinlabels:
+                                pinlabel = from_connector.pinlabels[to_pin_index]
+                                if pinlabel != "":
+                                    to_info.append(pinlabel)
+                            to_string = ":".join(from_info)
+                        else:
+                            to_string = ""
+                        html = [
+                            row.replace(f"<!-- {connection.via_port}_in -->", to_string)
+                            for row in html
+                        ]
 
             style, bgcolor = (
                 ("filled,dashed", self.options.bgcolor_bundle)
@@ -530,6 +609,79 @@ class Harness:
                 shape="box",
                 style=style,
                 fillcolor=translate_color(bgcolor, "HEX"),
+            )
+
+        for conduit in self.conduits.values():
+            html = []
+
+            awg_fmt = ""
+            if conduit.show_equiv:
+                # Only convert units we actually know about, i.e. currently
+                # mm2 and awg --- other units _are_ technically allowed,
+                # and passed through as-is.
+                if conduit.gauge_unit == "mm\u00B2":
+                    awg_fmt = f" ({awg_equiv(conduit.gauge)} AWG)"
+                elif conduit.gauge_unit.upper() == "AWG":
+                    awg_fmt = f" ({mm2_equiv(conduit.gauge)} mm\u00B2)"
+
+            # fmt: off
+            rows = [[f'{html_bgcolor(conduit.bgcolor_title)}{remove_links(conduit.name)}'
+                        if conduit.show_name else None],
+                    [pn_info_string(HEADER_PN, None,
+                        remove_links(conduit.pn)) if not isinstance(conduit.pn, list) else None,
+                     html_line_breaks(pn_info_string(HEADER_MPN,
+                        conduit.manufacturer if not isinstance(conduit.manufacturer, list) else None,
+                        conduit.mpn if not isinstance(conduit.mpn, list) else None)),
+                     html_line_breaks(pn_info_string(HEADER_SPN,
+                        conduit.supplier if not isinstance(conduit.supplier, list) else None,
+                        conduit.spn if not isinstance(conduit.spn, list) else None))],
+                     [html_line_breaks(conduit.type),
+                        f'{conduit.gauge} {conduit.gauge_unit}{awg_fmt}' if conduit.gauge else None,
+                        f'{conduit.length} {conduit.length_unit}' if conduit.length > 0 else None,
+                      translate_color(conduit.color, self.options.color_mode) if conduit.color else None,
+                      html_colorbar(cable.color)],
+                     '<!-- wire table -->',
+                     [html_image(conduit.image)],
+                     [html_caption(conduit.image)]]
+            # fmt: on
+
+            rows.extend(get_additional_component_table(self, conduit))
+            rows.append([html_line_breaks(conduit.notes)])
+            html.extend(nested_html_table(rows, html_bgcolor_attr(conduit.bgcolor)))
+
+            wirehtml = []
+            # conductor table
+            wirehtml.append('<table border="0" cellspacing="0" cellborder="0">')
+            wirehtml.append("   <tr><td>&nbsp;</td></tr>")
+
+            for i in range(1, conduit.ports+1):
+                # fmt: off
+                bgcolors = ['#000000'] + get_color_hex(conduit.colors[i - 1], pad=pad) + ['#000000']
+                wirehtml.append(f"   <tr>")
+                wirehtml.append(f'    <td colspan="3" border="0" cellspacing="0" cellpadding="0" port="w{i}" height="{(2 * len(bgcolors))}">')
+                wirehtml.append('     <table cellspacing="0" cellborder="0" border="0">')
+                for j, bgcolor in enumerate(bgcolors[::-1]):  # Reverse to match the curved wires when more than 2 colors
+                    wirehtml.append(f'      <tr><td colspan="3" cellpadding="0" height="2" bgcolor="{bgcolor if bgcolor != "" else wv_colors.default_color}" border="0"></td></tr>')
+                wirehtml.append("     </table>")
+                wirehtml.append("    </td>")
+                wirehtml.append("   </tr>")
+                # fmt: on
+
+                wirehtml.append("   <tr><td>&nbsp;</td></tr>")
+
+            wirehtml.append("  </table>")
+
+            html = [
+                row.replace("<!-- wire table -->", "\n".join(wirehtml)) for row in html
+            ]
+
+            html = "\n".join(html)
+            dot.node(
+                conduit.name,
+                label=f"<\n{html}\n>",
+                shape="box",
+                style='dotted',
+                fillcolor=translate_color(self.options.bgcolor_conduit, "HEX"),
             )
 
         # mates

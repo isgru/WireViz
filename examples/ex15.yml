@@ -1,0 +1,63 @@
+connectors:
+  X1:
+    pincount: 3
+  X2:
+    pincount: 2
+  X3:
+    pincount: 1
+
+conduits:
+  C1:
+    length: 0.1
+  C2:
+    length: 0.1
+  C3:
+    length: 0.1
+
+cables:
+  W1:
+    category: bundle
+    colors: [RD, BK]
+    length: 0.2
+  W2:
+    length: 0.2
+    colors: [BU]
+
+connections:
+  -
+    - X1: [1, 2]
+    - W1: [1, 2]
+    - X2: [1, 2]
+  -
+    - X1: 3
+    - W2
+    - X3
+
+conduit-connectors:
+  Y1:
+    pinlabels: [In, Out1, Out2]
+
+conduits:
+  C1:
+    cables: [W1, W2]
+    length: 0.1
+  C2:
+    cables: [W1]
+    length: 0.1
+  C3:
+    cables: [W2]
+    length: 0.1
+
+conduit-connections:
+  -
+    - X1
+    - C1
+    - Y1: 1
+  -
+    - Y1: 2
+    - C2
+    - X2
+  -
+    - Y1: 3
+    - C3
+    - X3

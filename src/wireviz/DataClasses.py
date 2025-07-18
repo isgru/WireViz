@@ -55,6 +55,7 @@ class Options:
     bgcolor_connector: Optional[Color] = None
     bgcolor_cable: Optional[Color] = None
     bgcolor_bundle: Optional[Color] = None
+    bgcolor_conduit: Optional[Color] = None
     color_mode: ColorMode = "SHORT"
     mini_bom_mode: bool = True
     template_separator: str = "."
@@ -68,6 +69,8 @@ class Options:
             self.bgcolor_cable = self.bgcolor_node
         if not self.bgcolor_bundle:
             self.bgcolor_bundle = self.bgcolor_cable
+        if not self.bgcolor_conduit:
+            self.bgcolor_conduit = self.bgcolor_cable
 
 
 @dataclass
@@ -241,6 +244,9 @@ class Connector:
                 f"invalid qty multiplier parameter for connector {qty_multiplier}"
             )
 
+@dataclass
+class ConduitConnector(Connector):
+    pass
 
 @dataclass
 class Cable:
@@ -272,6 +278,7 @@ class Cable:
     show_wirenumbers: Optional[bool] = None
     ignore_in_bom: bool = False
     additional_components: List[AdditionalComponent] = field(default_factory=list)
+    conduits: List[str] = None
 
     def __post_init__(self) -> None:
         if isinstance(self.image, dict):
@@ -322,49 +329,46 @@ class Cable:
 
         self.connections = []
 
-        if self.wirecount:  # number of wires explicitly defined
-            if self.colors:  # use custom color palette (partly or looped if needed)
-                pass
-            elif self.color_code:
-                # use standard color palette (partly or looped if needed)
-                if self.color_code not in COLOR_CODES:
-                    raise Exception("Unknown color code")
-                self.colors = COLOR_CODES[self.color_code]
-            else:  # no colors defined, add dummy colors
-                self.colors = [""] * self.wirecount
+        if not isinstance(self, Conduit):
+            if self.wirecount:  # number of wires explicitly defined
+                if self.colors:  # use custom color palette (partly or looped if needed)
+                    pass
+                elif self.color_code:
+                    # use standard color palette (partly or looped if needed)
+                    if self.color_code not in COLOR_CODES:
+                        raise Exception("Unknown color code")
+                    self.colors = COLOR_CODES[self.color_code]
+                else:  # no colors defined, add dummy colors
+                    self.colors = [""] * self.wirecount
 
-            # make color code loop around if more wires than colors
-            if self.wirecount > len(self.colors):
-                m = self.wirecount // len(self.colors) + 1
-                self.colors = self.colors * int(m)
-            # cut off excess after looping
-            self.colors = self.colors[: self.wirecount]
-        else:  # wirecount implicit in length of color list
-            if not self.colors:
-                raise Exception(
-                    "Unknown number of wires. Must specify wirecount or colors (implicit length)"
-                )
-            self.wirecount = len(self.colors)
+                # make color code loop around if more wires than colors
+                if self.wirecount > len(self.colors):
+                    m = self.wirecount // len(self.colors) + 1
+                    self.colors = self.colors * int(m)
+                # cut off excess after looping
+                self.colors = self.colors[: self.wirecount]
+            else:  # wirecount implicit in length of color list
+                if not self.colors:
+                    raise Exception(
+                        "Unknown number of wires. Must specify wirecount or colors (implicit length)"
+                    )
+                self.wirecount = len(self.colors)
 
-        if self.wirelabels:
-            if self.shield and "s" in self.wirelabels:
-                raise Exception(
-                    '"s" may not be used as a wire label for a shielded cable.'
-                )
+            if self.wirelabels:
+                if self.shield and "s" in self.wirelabels:
+                    raise Exception(
+                        '"s" may not be used as a wire label for a shielded cable.'
+                    )
 
-        # if lists of part numbers are provided check this is a bundle and that it matches the wirecount.
-        for idfield in [self.manufacturer, self.mpn, self.supplier, self.spn, self.pn]:
-            if isinstance(idfield, list):
-                if self.category == "bundle":
-                    # check the length
-                    if len(idfield) != self.wirecount:
-                        raise Exception("lists of part data must match wirecount")
-                else:
-                    raise Exception("lists of part data are only supported for bundles")
-
-        if self.show_name is None:
-            # hide designators for auto-generated cables by default
-            self.show_name = self.name[0:2] != "__"
+            # if lists of part numbers are provided check this is a bundle and that it matches the wirecount.
+            for idfield in [self.manufacturer, self.mpn, self.supplier, self.spn, self.pn]:
+                if isinstance(idfield, list):
+                    if self.category == "bundle":
+                        # check the length
+                        if len(idfield) != self.wirecount:
+                            raise Exception("lists of part data must match wirecount")
+                    else:
+                        raise Exception("lists of part data are only supported for bundles")
 
         if self.show_wirenumbers is None:
             # by default, show wire numbers for cables, hide for bundles
@@ -373,6 +377,10 @@ class Cable:
         for i, item in enumerate(self.additional_components):
             if isinstance(item, dict):
                 self.additional_components[i] = AdditionalComponent(**item)
+
+        if self.show_name is None:
+            # hide designators for auto-generated cables by default
+            self.show_name = self.name[0:2] != "__"
 
     # The *_pin arguments accept a tuple, but it seems not in use with the current code.
     def connect(
@@ -408,6 +416,16 @@ class Cable:
             raise ValueError(
                 f"invalid qty multiplier parameter for cable {qty_multiplier}"
             )
+
+@dataclass
+class Conduit(Cable):
+    cables: List[Cable] = field(default_factory=list)
+    ports: int = 0
+
+    def add_port(self, color: Color) -> int:
+        self.ports = self.ports + 1
+        self.colors.append(color)
+        return self.ports
 
 
 @dataclass

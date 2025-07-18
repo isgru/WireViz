@@ -25,6 +25,30 @@ connections:  # list of all connections to be made
     ...
   ...
 
+conduits:    # dictionary of all conduits
+  <str>   :    # unique conduit designator/name
+    ...          # conduit attributes (see below)
+  <str>   :
+    ...
+  ...
+
+conduit-connectors:  # dictionary of all used conduit-connectors
+  <str>   :    # unique connector designator/name
+    ...          # conduit-connector attributes (see below)
+  <str>   :
+    ...
+  ...
+
+conduit-connections:  # list of all connections to be made
+                      # between connectors, conduit-connectors
+                      # and conduits
+  -
+    ...         # connection set (see below)
+  -
+    ...
+  ...
+
+
 additional_bom_items:  # custom items to add to BOM
   - <bom-item>           # BOM item (see below)
   ...
@@ -40,16 +64,16 @@ options:  # dictionary of common attributes for the whole harness
 tweak:  # optional tweaking of .gv output
   ...
 ```
-## Connector attributes
+## Connector and conduit-connector attributes
 
 ```yaml
 <str>   :  # unique connector designator/name
   # general information about a connector (all optional)
-  type: <str>   
-  subtype: <str>   
+  type: <str>
+  subtype: <str>
   color: <color>  # see below
   image: <image>  # see below
-  notes: <str>   
+  notes: <str>
 
   # product information (all optional)
   ignore_in_bom: <bool>  # if set to true the connector is not added to the BOM
@@ -96,7 +120,7 @@ tweak:  # optional tweaking of .gv output
                         # generates one BOM item for every wire in the bundle
                         # instead of a single item for the entire cable;
                         # renders with a dashed outline
-  type: <str>   
+  type: <str>
   gauge: <int/float/str>  # allowed formats:
                           # <int/float> mm2  is understood
                           # <int> AWG        is understood
@@ -116,7 +140,7 @@ tweak:  # optional tweaking of .gv output
                         # A shield can be accessed by using 's' as the wire ID
   color: <color>  # see below
   image: <image>  # see below
-  notes: <str>   
+  notes: <str>
 
   # product information (all optional)
   ignore_in_bom: <bool>  # if set to true the cable or wires are not added to the BOM
@@ -150,12 +174,53 @@ tweak:  # optional tweaking of .gv output
 
 ```
 
-## Connection sets
+## Conduit attributes
+
+```yaml
+<str>   :  # unique conduit designator/name
+  # general information about a conduit (all optional)
+  type: <str>
+  gauge: <int/float/str>  # allowed formats:
+                          # <int/float> mm2  is understood
+                          # <int/float>      is assumed to be mm2
+                          # <str>            custom units and formats are allowed
+                          #                  but unavailable for auto-conversion
+                          # and display the result when set to true
+  length: <int/float>[ <unit>]  # <int/float> is assumed to be in meters unless <unit> is specified
+                                # e.g. length: 2.5 -> assumed to be 2.5 m
+                                # or   length: 2.5 ft -> "ft" is used as the unit
+                                # Units are not converted during BOM generation;
+                                # different units result in separate BOM entries.
+  cables: <List>  # see below
+  color: <color>  # see below
+  image: <image>  # see below
+  notes: <str>
+
+  # product information (all optional)
+  ignore_in_bom: <bool>  # if set to true the cable or wires are not added to the BOM
+  pn: <str>              # [internal] part number
+  manufacturer: <str>    # manufacturer name
+  mpn: <str>             # manufacturer part number
+  supplier: <str>        # supplier name
+  spn: <str>             # supplier part number
+  additional_components: # additional components
+    - <additional-component> # additional component (see below)
+
+  # rendering information (all optional)
+  bgcolor: <color>          # Background color of diagram cable box
+  bgcolor_title: <color>    # Background color of title in diagram cable box
+  show_name: <bool>         # defaults to true
+  show_wirecount: <bool>    # defaults to true
+  show_wirenumbers: <bool>  # defaults to true for cables; false for bundles
+
+```
+
+## Connection sets and conduit connection sets
 
 A connection set is used to connect multiple components together. Multiple connections can be easily created in parallel within one connection set, by specifying a list of individual pins (for `connectors`) or wires (for `cables`) for every component along the way.
 
 ```yaml
-connections:
+connections/conduit-connections:
   -                # Each list entry is a connection set
     - <component>    # Each connection set is itself a list of items
     - <component>    # Items must alternatingly belong to the connectors and cables sections
@@ -163,10 +228,10 @@ connections:
     -...
 
   - # example (single connection)
-    - <connector>: <pin>   # attach one pin of the connector
-    - <cable>:     <wire>  # attach one wire of the cable
-    - <connector>          # for simple connectors, pin 1 is implicit
-    - <cable>:     s       # for shielded wires, s attaches to the shield
+    - <connector/conduit-connector>: <pin>   # attach one pin of the connector
+    - <cable/conduit>:     <wire>  # attach one wire of the cable
+    - <connector/conduit-connector>          # for simple connectors, pin 1 is implicit
+    - <cable/conduit>:     s       # for shielded wires, s attaches to the shield
 
   - # example (multiple parallel connections)
     - <connector>: [<pin>,  ..., <pin> ]  # attach multiple pins in parallel
@@ -183,18 +248,18 @@ connections:
     - <connector>: [<pin>, ..., <pin>]
 
   - # example (arrows between connectors)
-    - <connector>                  
+    - <connector>
     - <arrow>                               # draw arrow linking the connectors themselves
                                             # use double line arrow (==, <==, <==>, ==>)
     - <connector>
 
-  ...    
+  ...
 ```
 
 - Each connection set is a list of components.
 - The minimum number of items is one.
 - The maximum number of items is unlimited.
-- Items must alternatingly belong to the `connectors` and the `cables` sections.
+- Items must alternatingly belong to the (`connectors` or `conduit-connectors`) and the (`cables` or `conduits`) sections.
 - When a connection set defines multiple parallel connections, the number of specified `<pin>`s and `<wire>`s for each component in the set must match. When specifying only one designator, one is auto-generated for each connection of the set.
 - `<pin>` may reference a pin's unique ID (as per the connector's `pins` attribute, auto-numbered from 1 by default) or its label (as per `pinlabels`).
 - `<wire>` may reference a wire's number within a cable/bundle, its label (as per `wirelabels`) or, if unambiguous, its color.
@@ -202,15 +267,19 @@ connections:
 
 ### Single connections
 
-#### Connectors
+#### Connectors and Conduit-Connectors
 
 - `- <designator>: <int/str>` attaches a pin of the connector, referring to a pin number (from the connector's `pins` attribute) or a pin label (from its `pinlabels` attribute), provided the label is unique.
 
-- `- <designator>` is allowed for simple connectors, since they have only one pin to connect.
+- `- <designator>` is allowed for simple connectors, since they have only one pin to connect. Also may be used for connecting a connector to a conduit if there is only one conduit connected.
 
 #### Cables
 
 - `<designator>: <wire>` attaches a specific wire of a cable, using its number.
+
+#### Conduit
+
+- `<designator>` attaches a conduit to a connector or conduit connector
 
 ### Multiple parallel connections
 
@@ -307,7 +376,7 @@ connections:
     - W.W1: [1,2,...]  # Use template W, generate instance with designator W1
     - Y.Y2: [1,2,...]  # generate more instances from the same templates
     - W.W2: [1,2,...]
-    - Y.Y3: [1,2,...]  
+    - Y.Y3: [1,2,...]
 
   -  # autogeneration of unnamed instances
     - Y3:   [1,2,...]  # reuse existing instance Y3
@@ -331,7 +400,7 @@ Even if a component is not connected to any other components, it must be mention
 ```yaml
 connectors:
   X1:  # this connector will not be connected to any other components
-    ... 
+    ...
 
 connections:
 -
@@ -422,9 +491,9 @@ Parts can be added to a connector or cable in the section `<additional-component
                   # total_length     sum of lengths of each wire in the bundle
   unit: <str>
   pn: <str>            # [internal] part number
-  manufacturer: <str>  # manufacturer name  
+  manufacturer: <str>  # manufacturer name
   mpn: <str>           # manufacturer part number
-  supplier: <str>      # supplier name  
+  supplier: <str>      # supplier name
   spn: <str>           # supplier part number
   bgcolor: <color>     # Background color of entry in diagram component box
 ```
@@ -433,15 +502,15 @@ Alternatively items can be added to just the BOM by putting them in the section 
 
 ```yaml
 -
-  description: <str>              
+  description: <str>
   # all the following are optional:
   qty: <int/float>  # qty to add to the bom (defaults to 1)
-  unit: <str>   
+  unit: <str>
   designators: <List>
   pn: <str>            # [internal] part number
-  manufacturer: <str>  # manufacturer name  
+  manufacturer: <str>  # manufacturer name
   mpn: <str>           # manufacturer part number
-  supplier: <str>      # supplier name  
+  supplier: <str>      # supplier name
   spn: <str>           # supplier part number
 ```
 
